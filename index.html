@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>勤怠管理システム</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', 'Meiryo UI', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        header {
+            background-color: #4CAF50;
+            color: white;
+            padding: 20px 0;
+            text-align: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        nav {
+            background-color: #333;
+            padding: 10px 0;
+        }
+        nav ul {
+            list-style-type: none;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+        }
+        nav ul li {
+            margin: 0 10px;
+        }
+        nav ul li a {
+            color: white;
+            text-decoration: none;
+            padding: 10px 15px;
+            display: block;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+        nav ul li a:hover {
+            background-color: #555;
+        }
+        .tab-content {
+            display: none;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            margin-top: 20px;
+        }
+        .active-tab {
+            display: block;
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .chart-container {
+            margin-top: 20px;
+            height: 400px;
+        }
+        .import-container {
+            margin-top: 20px;
+        }
+        .error {
+            color: red;
+            margin-top: 5px;
+        }
+        .success {
+            color: green;
+            margin-top: 5px;
+        }
+        .actions {
+            display: flex;
+            gap: 10px;
+        }
+        .actions button {
+            padding: 5px 10px;
+            font-size: 14px;
+        }
+        .delete-btn {
+            background-color: #f44336;
+        }
+        .delete-btn:hover {
+            background-color: #d32f2f;
+        }
+        .edit-btn {
+            background-color: #2196F3;
+        }
+        .edit-btn:hover {
+            background-color: #0b7dda;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 500px;
+            border-radius: 8px;
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .close:hover {
+            color: black;
+        }
+        .filter-controls {
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .filter-controls .form-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 0;
+        }
+        .filter-controls button {
+            padding: 8px 15px;
+            margin-left: 5px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>勤怠管理システム</h1>
+    </header>
+    
+    <nav>
+        <ul>
+            <li><a href="#" class="tab-link active" data-tab="input">勤怠入力</a></li>
+            <li><a href="#" class="tab-link" data-tab="view">勤怠一覧</a></li>
+            <li><a href="#" class="tab-link" data-tab="graph">グラフ表示</a></li>
+            <li><a href="#" class="tab-link" data-tab="import">CSVインポート</a></li>
+        </ul>
+    </nav>
+    
+    <div class="container">
+        <!-- 勤怠入力タブ -->
+        <div id="input" class="tab-content active-tab">
+            <h2>勤怠データ入力</h2>
+            <form id="attendanceForm">
+                <div class="form-group">
+                    <label for="name">名前</label>
+                    <input type="text" id="name" name="name" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="date">日付</label>
+                    <input type="date" id="date" name="date" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="startTime">開始時刻</label>
+                    <input type="time" id="startTime" name="startTime" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="endTime">終了時刻</label>
+                    <input type="time" id="endTime" name="endTime" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="breakTime">休憩時間（時間）</label>
+                    <input type="number" id="breakTime" name="breakTime" min="0" step="0.1" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="overtimeHours">残業時間（時間）</label>
+                    <input type="number" id="overtimeHours" name="overtimeHours" min="0" step="0.1" required>
+                </div>
+                
+                <button type="submit">登録</button>
+            </form>
+            
+            <div id="formMessage"></div>
+        </div>
+        
+        <!-- 勤怠一覧タブ -->
+        <div id="view" class="tab-content">
+            <h2>勤怠データ一覧</h2>
+            <table id="attendanceTable">
+                <thead>
+                    <tr>
+                        <th>名前</th>
+                        <th>日付</th>
+                        <th>開始時刻</th>
+                        <th>終了時刻</th>
+                        <th>休憩時間（時間）</th>
+                        <th>残業時間（時間）</th>
+                        <th>実働時間</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- ここにJSでデータを挿入 -->
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- グラフ表示タブ -->
+        <div id="graph" class="tab-content">
+            <h2>勤怠データグラフ</h2>
+            <div class="filter-controls">
+                <div class="form-group">
+                    <label for="dateFilter">日付選択:</label>
+                    <input type="date" id="dateFilter">
+                    <button id="applyDateFilter">適用</button>
+                    <button id="resetDateFilter">リセット</button>
+                </div>
+            </div>
+            <div class="chart-container">
+                <canvas id="workTimeChart"></canvas>
+            </div>
+        </div>
+        
+        <!-- CSVインポートタブ -->
+        <div id="import" class="tab-content">
+            <h2>CSVデータインポート</h2>
+            <div class="import-container">
+                <div class="form-group">
+                    <label for="csvFile">CSVファイル選択</label>
+                    <input type="file" id="csvFile" accept=".csv">
+                </div>
+                <button id="importBtn">インポート</button>
+                <div id="importMessage"></div>
+                                            <div class="csv-format-info">
+                    <h3>CSVフォーマット</h3>
+                    <p>CSVファイルは以下の形式でデータを含める必要があります：</p>
+                    <code>名前,日付(YYYY-MM-DD),開始時刻(HH:MM),終了時刻(HH:MM),休憩時間(時間),残業時間(時間)</code>
+                    <p>例：</p>
+                    <code>山田太郎,2025-05-13,09:00,18:00,1.0,0.5</code>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 編集モーダル -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>勤怠データ編集</h2>
+            <form id="editForm">
+                <input type="hidden" id="editId">
+                <div class="form-group">
+                    <label for="editName">名前</label>
+                    <input type="text" id="editName" name="editName" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="editDate">日付</label>
+                    <input type="date" id="editDate" name="editDate" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="editStartTime">開始時刻</label>
+                    <input type="time" id="editStartTime" name="editStartTime" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="editEndTime">終了時刻</label>
+                    <input type="time" id="editEndTime" name="editEndTime" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="editBreakTime">休憩時間（時間）</label>
+                    <input type="number" id="editBreakTime" name="editBreakTime" min="0" step="0.1" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="editOvertimeHours">残業時間（時間）</label>
+                    <input type="number" id="editOvertimeHours" name="editOvertimeHours" min="0" step="0.1" required>
+                </div>
+                
+                <button type="submit">更新</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // データ保存用の配列
+        let attendanceData = [];
+        
+        // メモリ内データ保存（localStorage の代わり）
+        let inMemoryStorage = {};
+        
+        // localStorage代替関数
+        function getStorageData(key) {
+            try {
+                return JSON.parse(localStorage.getItem(key));
+            } catch (e) {
+                console.log('localStorage not available, using in-memory storage');
+                return inMemoryStorage[key] || null;
+            }
+        }
+        
+        function setStorageData(key, value) {
+            try {
+                localStorage.setItem(key, JSON.stringify(value));
+            } catch (e) {
+                console.log('localStorage not available, using in-memory storage');
+                inMemoryStorage[key] = value;
+            }
+        }
+        
+        // 保存データの取得
+        attendanceData = getStorageData('attendanceData') || [];
+        
+        // DOM要素取得
+        const attendanceForm = document.getElementById('attendanceForm');
+        const formMessage = document.getElementById('formMessage');
+        const attendanceTable = document.getElementById('attendanceTable');
+        // グラフ用の要素
+        const dateFilter = document.getElementById('dateFilter');
+        const applyDateFilter = document.getElementById('applyDateFilter');
+        const resetDateFilter = document.getElementById('resetDateFilter');
+        const csvFile = document.getElementById('csvFile');
+        const importBtn = document.getElementById('importBtn');
+        const importMessage = document.getElementById('importMessage');
+        const editModal = document.getElementById('editModal');
+        const editForm = document.getElementById('editForm');
+        const closeModal = document.querySelector('.close');
+        
+        // タブ切り替え
+        const tabLinks = document.querySelectorAll('.tab-link');
+        const tabContents = document.querySelectorAll('.tab-content');
+        
+        tabLinks.forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const targetTab = link.getAttribute('data-tab');
+                
+                tabLinks.forEach(l => l.classList.remove('active'));
+                tabContents.forEach(c => c.classList.remove('active-tab'));
+                
+                link.classList.add('active');
+                document.getElementById(targetTab).classList.add('active-tab');
+                
+                if (targetTab === 'view') {
+                    renderAttendanceTable();
+                } else if (targetTab === 'graph') {
+                    renderChart();
+                }
+            });
+        });
+        
+        // 勤怠データ登録
+        attendanceForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            const name = document.getElementById('name').value;
+            const date = document.getElementById('date').value;
+            const startTime = document.getElementById('startTime').value;
+            const endTime = document.getElementById('endTime').value;
+            const breakTime = parseInt(document.getElementById('breakTime').value);
+            const overtimeHours = parseInt(document.getElementById('overtimeHours').value);
+            
+            // 実働時間の計算
+            const workTime = calculateWorkTime(startTime, endTime, breakTime);
+            
+            // データ追加
+            const newData = {
+                id: Date.now().toString(),
+                name,
+                date,
+                startTime,
+                endTime,
+                breakTime: parseFloat(breakTime),
+                overtimeHours: parseFloat(overtimeHours),
+                workTime
+            };
+            
+            attendanceData.push(newData);
+            saveData();
+            
+            // フォームクリア
+            attendanceForm.reset();
+            
+            // メッセージ表示
+            formMessage.innerHTML = '<p class="success">勤怠データを登録しました。</p>';
+            setTimeout(() => {
+                formMessage.innerHTML = '';
+            }, 3000);
+        });
+        
+        // 実働時間の計算
+        function calculateWorkTime(startTime, endTime, breakTimeHours) {
+            const [startHour, startMinute] = startTime.split(':').map(Number);
+            const [endHour, endMinute] = endTime.split(':').map(Number);
+            
+            let startMinutes = startHour * 60 + startMinute;
+            let endMinutes = endHour * 60 + endMinute;
+            
+            // 日をまたぐ場合の処理
+            if (endMinutes < startMinutes) {
+                endMinutes += 24 * 60;
+            }
+            
+            // 実働時間（分）
+            const workMinutes = endMinutes - startMinutes - (breakTimeHours * 60);
+            return workMinutes;
+        }
+        
+        // データ保存
+        function saveData() {
+            setStorageData('attendanceData', attendanceData);
+        }
+        
+        // 勤怠テーブル表示
+        function renderAttendanceTable() {
+            const tableBody = attendanceTable.querySelector('tbody');
+            tableBody.innerHTML = '';
+            
+            attendanceData.forEach(data => {
+                const row = document.createElement('tr');
+                
+                // 実働時間を時間:分形式に変換
+                const hours = Math.floor(data.workTime / 60);
+                const minutes = data.workTime % 60;
+                const workTimeFormatted = `${hours}時間${minutes}分`;
+                
+                row.innerHTML = `
+                    <td>${data.name}</td>
+                    <td>${data.date}</td>
+                    <td>${data.startTime}</td>
+                    <td>${data.endTime}</td>
+                    <td>${data.breakTime}時間</td>
+                    <td>${data.overtimeHours}時間</td>
+                    <td>${workTimeFormatted}</td>
+                    <td class="actions">
+                        <button class="edit-btn" data-id="${data.id}">編集</button>
+                        <button class="delete-btn" data-id="${data.id}">削除</button>
+                    </td>
+                `;
+                
+                tableBody.appendChild(row);
+            });
+            
+            // 編集ボタンイベント
+            document.querySelectorAll('.edit-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const id = e.target.getAttribute('data-id');
+                    openEditModal(id);
+                });
+            });
+            
+            // 削除ボタンイベント
+            document.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const id = e.target.getAttribute('data-id');
+                    deleteAttendance(id);
+                });
+            });
+        }
+        
+        // 勤怠データ削除
+        function deleteAttendance(id) {
+            if (confirm('このデータを削除してもよろしいですか？')) {
+                attendanceData = attendanceData.filter(data => data.id !== id);
+                saveData();
+                renderAttendanceTable();
+            }
+        }
+        
+        // 編集モーダル表示
+        function openEditModal(id) {
+            const data = attendanceData.find(item => item.id === id);
+            
+            if (data) {
+                document.getElementById('editId').value = data.id;
+                document.getElementById('editName').value = data.name;
+                document.getElementById('editDate').value = data.date;
+                document.getElementById('editStartTime').value = data.startTime;
+                document.getElementById('editEndTime').value = data.endTime;
+                document.getElementById('editBreakTime').value = data.breakTime;
+                document.getElementById('editOvertimeHours').value = data.overtimeHours;
+                
+                editModal.style.display = 'block';
+            }
+        }
+        
+        // モーダルを閉じる
+        closeModal.addEventListener('click', () => {
+            editModal.style.display = 'none';
+        });
+        
+        window.addEventListener('click', (e) => {
+            if (e.target === editModal) {
+                editModal.style.display = 'none';
+            }
+        });
+        
+        // 編集フォーム送信
+        editForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            const id = document.getElementById('editId').value;
+            const name = document.getElementById('editName').value;
+            const date = document.getElementById('editDate').value;
+            const startTime = document.getElementById('editStartTime').value;
+            const endTime = document.getElementById('editEndTime').value;
+            const breakTime = parseInt(document.getElementById('editBreakTime').value);
+            const overtimeHours = parseInt(document.getElementById('editOvertimeHours').value);
+            
+            // 実働時間の計算
+            const workTime = calculateWorkTime(startTime, endTime, parseFloat(breakTime));
+            
+            // データ更新
+            const index = attendanceData.findIndex(item => item.id === id);
+            
+            if (index !== -1) {
+                attendanceData[index] = {
+                    id,
+                    name,
+                    date,
+                    startTime,
+                    endTime,
+                    breakTime: parseFloat(breakTime),
+                    overtimeHours: parseFloat(overtimeHours),
+                    workTime
+                };
+                
+                saveData();
+                renderAttendanceTable();
+                
+                // モーダルを閉じる
+                editModal.style.display = 'none';
+            }
+        });
+        
+        // グラフ描画
+        let workTimeChart;
+        let selectedDate = null;
+        
+        // 日付フィルターボタンイベント
+        applyDateFilter.addEventListener('click', () => {
+            selectedDate = dateFilter.value;
+            renderChart();
+        });
+        
+        resetDateFilter.addEventListener('click', () => {
+            dateFilter.value = '';
+            selectedDate = null;
+            renderChart();
+        });
+        
+        function renderChart() {
+            // フィルタリングされたデータ
+            let filteredData = [...attendanceData];
+            
+            // 日付フィルターの適用
+            if (selectedDate) {
+                filteredData = filteredData.filter(data => data.date === selectedDate);
+            }
+            
+            // 従業員名でグループ化
+            const employeeData = {};
+            
+            filteredData.forEach(data => {
+                if (!employeeData[data.name]) {
+                    employeeData[data.name] = {
+                        workTime: 0,
+                        overtimeHours: 0,
+                        count: 0
+                    };
+                }
+                
+                employeeData[data.name].workTime += data.workTime / 60; // 時間単位に変換
+                employeeData[data.name].overtimeHours += data.overtimeHours;
+                employeeData[data.name].count++;
+            });
+            
+            // チャートデータの準備
+            const labels = Object.keys(employeeData);
+            const workTimeData = labels.map(name => employeeData[name].workTime);
+            const overtimeData = labels.map(name => employeeData[name].overtimeHours);
+            
+            // データがない場合の処理
+            if (labels.length === 0) {
+                if (workTimeChart) {
+                    workTimeChart.destroy();
+                    workTimeChart = null;
+                }
+                
+                const ctx = document.getElementById('workTimeChart').getContext('2d');
+                ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+                ctx.font = '16px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('表示するデータがありません', ctx.canvas.width / 2, ctx.canvas.height / 2);
+                return;
+            }
+            
+            const ctx = document.getElementById('workTimeChart').getContext('2d');
+            
+            // 既存のチャートを破棄
+            if (workTimeChart) {
+                workTimeChart.destroy();
+            }
+            
+            // タイトルテキスト
+            const titleText = selectedDate ? `${selectedDate}の勤怠データ` : '全期間の勤怠データ';
+            
+            // 新しいチャート作成
+            workTimeChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: '実働時間（時間）',
+                            data: workTimeData,
+                            backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            borderWidth: 1
+                        },
+                        {
+                            label: '残業時間（時間）',
+                            data: overtimeData,
+                            backgroundColor: 'rgba(255, 99, 132, 0.6)',
+                            borderColor: 'rgba(255, 99, 132, 1)',
+                            borderWidth: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: '時間'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: '従業員'
+                            }
+                        }
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: titleText,
+                            font: {
+                                size: 16
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                footer: function(tooltipItems) {
+                                    const index = tooltipItems[0].dataIndex;
+                                    const label = tooltipItems[0].label;
+                                    const days = employeeData[label].count;
+                                    return `集計日数: ${days}日`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // CSVインポート
+        importBtn.addEventListener('click', () => {
+            const file = csvFile.files[0];
+            
+            if (!file) {
+                importMessage.innerHTML = '<p class="error">ファイルを選択してください。</p>';
+                return;
+            }
+            
+            if (file.type !== 'text/csv' && !file.name.endsWith('.csv')) {
+                importMessage.innerHTML = '<p class="error">CSVファイルを選択してください。</p>';
+                return;
+            }
+            
+            // CSVファイル読み込み
+            Papa.parse(file, {
+                header: false,
+                complete: (results) => {
+                    try {
+                        let importCount = 0;
+                        
+                        results.data.forEach(row => {
+                            // 空行をスキップ
+                            if (row.length < 6 || row.every(cell => !cell)) {
+                                return;
+                            }
+                            
+                            const [name, date, startTime, endTime, breakTime, overtimeHours] = row;
+                            
+                            // バリデーション
+                            if (!name || !date || !startTime || !endTime || !breakTime || !overtimeHours) {
+                                return;
+                            }
+                            
+                            // 実働時間の計算
+                            const workTime = calculateWorkTime(startTime, endTime, parseFloat(breakTime));
+                            
+                            // データ追加
+                            const newData = {
+                                id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+                                name,
+                                date,
+                                startTime,
+                                endTime,
+                                breakTime: parseFloat(breakTime),
+                                overtimeHours: parseFloat(overtimeHours),
+                                workTime
+                            };
+                            
+                            attendanceData.push(newData);
+                            importCount++;
+                        });
+                        
+                        // データ保存
+                        saveData();
+                        
+                        // メッセージ表示
+                        importMessage.innerHTML = `<p class="success">${importCount}件のデータをインポートしました。</p>`;
+                        csvFile.value = '';
+                    } catch (error) {
+                        importMessage.innerHTML = `<p class="error">インポート中にエラーが発生しました: ${error.message}</p>`;
+                    }
+                },
+                error: (error) => {
+                    importMessage.innerHTML = `<p class="error">ファイル読み込みエラー: ${error.message}</p>`;
+                }
+            });
+        });
+        
+        // 初期表示
+        document.addEventListener('DOMContentLoaded', () => {
+            // 今日の日付をデフォルトで設定
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('date').value = today;
+        });
+    </script>
+</body>
+</html>
