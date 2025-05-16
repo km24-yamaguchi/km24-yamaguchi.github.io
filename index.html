@@ -176,21 +176,8 @@
         .close:hover {
             color: black;
         }
-        .filter-controls {
+        #employeeSelect {
             margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .filter-controls .form-group {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 0;
-        }
-        .filter-controls button {
-            padding: 8px 15px;
-            margin-left: 5px;
         }
     </style>
 </head>
@@ -234,13 +221,13 @@
                 </div>
                 
                 <div class="form-group">
-                    <label for="breakTime">休憩時間（時間）</label>
-                    <input type="number" id="breakTime" name="breakTime" min="0" step="0.1" required>
+                    <label for="breakTime">休憩時間（分）</label>
+                    <input type="number" id="breakTime" name="breakTime" min="0" required>
                 </div>
                 
                 <div class="form-group">
-                    <label for="overtimeHours">残業時間（時間）</label>
-                    <input type="number" id="overtimeHours" name="overtimeHours" min="0" step="0.1" required>
+                    <label for="overtimeHours">時間外（分）</label>
+                    <input type="number" id="overtimeHours" name="overtimeHours" min="0" required>
                 </div>
                 
                 <button type="submit">登録</button>
@@ -259,8 +246,8 @@
                         <th>日付</th>
                         <th>開始時刻</th>
                         <th>終了時刻</th>
-                        <th>休憩時間（時間）</th>
-                        <th>残業時間（時間）</th>
+                        <th>休憩時間</th>
+                        <th>時間外</th>
                         <th>実働時間</th>
                         <th>操作</th>
                     </tr>
@@ -274,13 +261,12 @@
         <!-- グラフ表示タブ -->
         <div id="graph" class="tab-content">
             <h2>勤怠データグラフ</h2>
-            <div class="filter-controls">
-                <div class="form-group">
-                    <label for="dateFilter">日付選択:</label>
-                    <input type="date" id="dateFilter">
-                    <button id="applyDateFilter">適用</button>
-                    <button id="resetDateFilter">リセット</button>
-                </div>
+            <div>
+                <label for="employeeSelect">従業員選択:</label>
+                <select id="employeeSelect">
+                    <option value="all">全員</option>
+                    <!-- ここに従業員名をJSで挿入 -->
+                </select>
             </div>
             <div class="chart-container">
                 <canvas id="workTimeChart"></canvas>
@@ -297,12 +283,12 @@
                 </div>
                 <button id="importBtn">インポート</button>
                 <div id="importMessage"></div>
-                                            <div class="csv-format-info">
+                <div class="csv-format-info">
                     <h3>CSVフォーマット</h3>
                     <p>CSVファイルは以下の形式でデータを含める必要があります：</p>
-                    <code>名前,日付(YYYY-MM-DD),開始時刻(HH:MM),終了時刻(HH:MM),休憩時間(時間),残業時間(時間)</code>
+                    <code>名前,日付(YYYY-MM-DD),開始時刻(HH:MM),終了時刻(HH:MM),休憩時間(分),時間外(分)</code>
                     <p>例：</p>
-                    <code>山田太郎,2025-05-13,09:00,18:00,1.0,0.5</code>
+                    <code>山田太郎,2025-05-13,09:00,18:00,60,30</code>
                 </div>
             </div>
         </div>
@@ -336,13 +322,13 @@
                 </div>
                 
                 <div class="form-group">
-                    <label for="editBreakTime">休憩時間（時間）</label>
-                    <input type="number" id="editBreakTime" name="editBreakTime" min="0" step="0.1" required>
+                    <label for="editBreakTime">休憩時間（分）</label>
+                    <input type="number" id="editBreakTime" name="editBreakTime" min="0" required>
                 </div>
                 
                 <div class="form-group">
-                    <label for="editOvertimeHours">残業時間（時間）</label>
-                    <input type="number" id="editOvertimeHours" name="editOvertimeHours" min="0" step="0.1" required>
+                    <label for="editOvertimeHours">時間外（分）</label>
+                    <input type="number" id="editOvertimeHours" name="editOvertimeHours" min="0" required>
                 </div>
                 
                 <button type="submit">更新</button>
@@ -352,41 +338,13 @@
 
     <script>
         // データ保存用の配列
-        let attendanceData = [];
-        
-        // メモリ内データ保存（localStorage の代わり）
-        let inMemoryStorage = {};
-        
-        // localStorage代替関数
-        function getStorageData(key) {
-            try {
-                return JSON.parse(localStorage.getItem(key));
-            } catch (e) {
-                console.log('localStorage not available, using in-memory storage');
-                return inMemoryStorage[key] || null;
-            }
-        }
-        
-        function setStorageData(key, value) {
-            try {
-                localStorage.setItem(key, JSON.stringify(value));
-            } catch (e) {
-                console.log('localStorage not available, using in-memory storage');
-                inMemoryStorage[key] = value;
-            }
-        }
-        
-        // 保存データの取得
-        attendanceData = getStorageData('attendanceData') || [];
+        let attendanceData = JSON.parse(localStorage.getItem('attendanceData')) || [];
         
         // DOM要素取得
         const attendanceForm = document.getElementById('attendanceForm');
         const formMessage = document.getElementById('formMessage');
         const attendanceTable = document.getElementById('attendanceTable');
-        // グラフ用の要素
-        const dateFilter = document.getElementById('dateFilter');
-        const applyDateFilter = document.getElementById('applyDateFilter');
-        const resetDateFilter = document.getElementById('resetDateFilter');
+        const employeeSelect = document.getElementById('employeeSelect');
         const csvFile = document.getElementById('csvFile');
         const importBtn = document.getElementById('importBtn');
         const importMessage = document.getElementById('importMessage');
@@ -412,6 +370,7 @@
                 if (targetTab === 'view') {
                     renderAttendanceTable();
                 } else if (targetTab === 'graph') {
+                    updateEmployeeSelect();
                     renderChart();
                 }
             });
@@ -438,8 +397,8 @@
                 date,
                 startTime,
                 endTime,
-                breakTime: parseFloat(breakTime),
-                overtimeHours: parseFloat(overtimeHours),
+                breakTime,
+                overtimeHours,
                 workTime
             };
             
@@ -457,7 +416,7 @@
         });
         
         // 実働時間の計算
-        function calculateWorkTime(startTime, endTime, breakTimeHours) {
+        function calculateWorkTime(startTime, endTime, breakTime) {
             const [startHour, startMinute] = startTime.split(':').map(Number);
             const [endHour, endMinute] = endTime.split(':').map(Number);
             
@@ -470,13 +429,12 @@
             }
             
             // 実働時間（分）
-            const workMinutes = endMinutes - startMinutes - (breakTimeHours * 60);
-            return workMinutes;
+            return endMinutes - startMinutes - breakTime;
         }
         
         // データ保存
         function saveData() {
-            setStorageData('attendanceData', attendanceData);
+            localStorage.setItem('attendanceData', JSON.stringify(attendanceData));
         }
         
         // 勤怠テーブル表示
@@ -497,8 +455,8 @@
                     <td>${data.date}</td>
                     <td>${data.startTime}</td>
                     <td>${data.endTime}</td>
-                    <td>${data.breakTime}時間</td>
-                    <td>${data.overtimeHours}時間</td>
+                    <td>${data.breakTime}分</td>
+                    <td>${data.overtimeHours}分</td>
                     <td>${workTimeFormatted}</td>
                     <td class="actions">
                         <button class="edit-btn" data-id="${data.id}">編集</button>
@@ -576,7 +534,7 @@
             const overtimeHours = parseInt(document.getElementById('editOvertimeHours').value);
             
             // 実働時間の計算
-            const workTime = calculateWorkTime(startTime, endTime, parseFloat(breakTime));
+            const workTime = calculateWorkTime(startTime, endTime, breakTime);
             
             // データ更新
             const index = attendanceData.findIndex(item => item.id === id);
@@ -588,8 +546,8 @@
                     date,
                     startTime,
                     endTime,
-                    breakTime: parseFloat(breakTime),
-                    overtimeHours: parseFloat(overtimeHours),
+                    breakTime,
+                    overtimeHours,
                     workTime
                 };
                 
@@ -601,67 +559,46 @@
             }
         });
         
-        // グラフ描画
-        let workTimeChart;
-        let selectedDate = null;
-        
-        // 日付フィルターボタンイベント
-        applyDateFilter.addEventListener('click', () => {
-            selectedDate = dateFilter.value;
-            renderChart();
-        });
-        
-        resetDateFilter.addEventListener('click', () => {
-            dateFilter.value = '';
-            selectedDate = null;
-            renderChart();
-        });
-        
-        function renderChart() {
-            // フィルタリングされたデータ
-            let filteredData = [...attendanceData];
+        // 従業員選択の更新
+        function updateEmployeeSelect() {
+            const employees = [...new Set(attendanceData.map(data => data.name))];
             
-            // 日付フィルターの適用
-            if (selectedDate) {
-                filteredData = filteredData.filter(data => data.date === selectedDate);
-            }
-            
-            // 従業員名でグループ化
-            const employeeData = {};
-            
-            filteredData.forEach(data => {
-                if (!employeeData[data.name]) {
-                    employeeData[data.name] = {
-                        workTime: 0,
-                        overtimeHours: 0,
-                        count: 0
-                    };
+            // 既存のオプションをクリア
+            const options = Array.from(employeeSelect.querySelectorAll('option'));
+            options.forEach(option => {
+                if (option.value !== 'all') {
+                    option.remove();
                 }
-                
-                employeeData[data.name].workTime += data.workTime / 60; // 時間単位に変換
-                employeeData[data.name].overtimeHours += data.overtimeHours;
-                employeeData[data.name].count++;
             });
             
-            // チャートデータの準備
-            const labels = Object.keys(employeeData);
-            const workTimeData = labels.map(name => employeeData[name].workTime);
-            const overtimeData = labels.map(name => employeeData[name].overtimeHours);
+            // 従業員オプションを追加
+            employees.forEach(name => {
+                const option = document.createElement('option');
+                option.value = name;
+                option.textContent = name;
+                employeeSelect.appendChild(option);
+            });
+        }
+        
+        // グラフ描画
+        let workTimeChart;
+        
+        function renderChart() {
+            const selectedEmployee = employeeSelect.value;
             
-            // データがない場合の処理
-            if (labels.length === 0) {
-                if (workTimeChart) {
-                    workTimeChart.destroy();
-                    workTimeChart = null;
-                }
-                
-                const ctx = document.getElementById('workTimeChart').getContext('2d');
-                ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-                ctx.font = '16px Arial';
-                ctx.textAlign = 'center';
-                ctx.fillText('表示するデータがありません', ctx.canvas.width / 2, ctx.canvas.height / 2);
-                return;
+            // フィルタリングされたデータ
+            let filteredData = attendanceData;
+            if (selectedEmployee !== 'all') {
+                filteredData = attendanceData.filter(data => data.name === selectedEmployee);
             }
+            
+            // データを日付順にソート
+            filteredData.sort((a, b) => new Date(a.date) - new Date(b.date));
+            
+            // グラフデータ作成
+            const labels = filteredData.map(data => `${data.date} (${data.name})`);
+            const workTimeData = filteredData.map(data => data.workTime / 60); // 時間単位に変換
+            const overtimeData = filteredData.map(data => data.overtimeHours / 60); // 時間単位に変換
             
             const ctx = document.getElementById('workTimeChart').getContext('2d');
             
@@ -669,9 +606,6 @@
             if (workTimeChart) {
                 workTimeChart.destroy();
             }
-            
-            // タイトルテキスト
-            const titleText = selectedDate ? `${selectedDate}の勤怠データ` : '全期間の勤怠データ';
             
             // 新しいチャート作成
             workTimeChart = new Chart(ctx, {
@@ -687,7 +621,7 @@
                             borderWidth: 1
                         },
                         {
-                            label: '残業時間（時間）',
+                            label: '時間外（時間）',
                             data: overtimeData,
                             backgroundColor: 'rgba(255, 99, 132, 0.6)',
                             borderColor: 'rgba(255, 99, 132, 1)',
@@ -705,36 +639,14 @@
                                 display: true,
                                 text: '時間'
                             }
-                        },
-                        x: {
-                            title: {
-                                display: true,
-                                text: '従業員'
-                            }
-                        }
-                    },
-                    plugins: {
-                        title: {
-                            display: true,
-                            text: titleText,
-                            font: {
-                                size: 16
-                            }
-                        },
-                        tooltip: {
-                            callbacks: {
-                                footer: function(tooltipItems) {
-                                    const index = tooltipItems[0].dataIndex;
-                                    const label = tooltipItems[0].label;
-                                    const days = employeeData[label].count;
-                                    return `集計日数: ${days}日`;
-                                }
-                            }
                         }
                     }
                 }
             });
         }
+        
+        // 従業員選択変更時にグラフ更新
+        employeeSelect.addEventListener('change', renderChart);
         
         // CSVインポート
         importBtn.addEventListener('click', () => {
@@ -771,7 +683,7 @@
                             }
                             
                             // 実働時間の計算
-                            const workTime = calculateWorkTime(startTime, endTime, parseFloat(breakTime));
+                            const workTime = calculateWorkTime(startTime, endTime, parseInt(breakTime));
                             
                             // データ追加
                             const newData = {
@@ -780,8 +692,8 @@
                                 date,
                                 startTime,
                                 endTime,
-                                breakTime: parseFloat(breakTime),
-                                overtimeHours: parseFloat(overtimeHours),
+                                breakTime: parseInt(breakTime),
+                                overtimeHours: parseInt(overtimeHours),
                                 workTime
                             };
                             
